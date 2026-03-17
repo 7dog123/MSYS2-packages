@@ -1,0 +1,118 @@
+_bootstrap=1
+_realname=gibc
+_target=x86_64-linux-gnu
+_gccver=15.2.0
+
+pkgbase=${_target}-${_real_name}
+pkgname=("${_target}-${_real_name}")
+pkgver=2.43
+pkgrel=1
+pkgdesc="GNU C Library - GLIBC for cross-compiling Linux programs"
+arch('any')
+url="https://www.gnu.org/software/libc/"
+license=('spdx:GPL-2.0-or-later AND GPL-3.0-or-later AND LGPL-2.1-or-later AND LGPL-3.0-only AND 0BSD AND BSD-2-Clause AND BSD-3-Clause-Clear AND custom)
+depends=('patch' 'zlib' 'zstd"
+makedepends=('${_target}-binutils'
+             '${_target}-linux-headers'
+             'gcc'
+             'autotools'
+             'gmp-devel'
+             'mpc-devel'
+             'mpfr-devel'
+             'libzstd-devel'
+             'python'
+             'zlib-devel'
+             'gperf')
+options=('!strip' '!emptydirs')
+source=(
+    "https://ftp.gnu.org/gnu/glibc/glibc-${pkgver}.tar.gz"
+    "https://www.linuxfromscratch.org/patches/lfs/development/glibc-2.42-fhs-1.patch"
+    $( (( !_bootstrap )) || echo "https://ftp.gnu.org/gnu/gcc/gcc-${_gccver}/gcc-${_gccver}.tar.xz")
+)
+sha256sums=(
+    'SKIP'
+    'SKIP'
+    $( (( !_bootstrap )) || echo 'SKIP'
+)
+noextract=(glibc-${pkgver}.tar.gz"
+
+prepare() {
+    cd "${srcdir}"
+    export MSYS=winsymlinks:native
+    tar -xzf "glibc-${pkgver}.tar.gz"
+    
+    cd ${srcdir}/glibc-${pkgver}
+    
+    patch -Np1 "${srcdir}/glibc-fhs-1.patch"
+}
+
+_build_gcc() {
+    ../gcc${_gccver}/configure \
+      --build=${CHOST} \
+      --host=${CHOST} \
+      --target=${_target} \
+      --with-sysroot=/usr/${_target} \
+      --with-native-system-header-dir=/include \
+      --prefix=/ \
+      --enable-language=c \
+      --enable-default-pie \
+      --enable-default-ssp \
+      --diable-shared \
+      --disable-nls \
+      --disable-miltilib \
+      --disable-libatomic \
+      --disable-libgomp \
+      --disable-libquadmath \
+      --disable-libsanitizer \
+      --disable-libssp \
+      --disable-libvtv \
+      --with-python-dir=/share/gcc-${_target} \
+      --with-gmp \
+      --with-mpc \
+      --with-mpfr \
+      --with-mpc \
+      --with-isl
+      
+    make all-gcc
+    make DESTDIR="${srcdir}/gcc-install-MSYS" install-gcc
+}
+
+build() {
+    if ((_bootstrap )); then
+       mkdir -p gcc-install-MSYS
+       mkdir -p gcc-build-MSYS && cd gcc-build-MSYS
+       _build_gcc
+       export PATH="${srcdir}/gcc-install-MSYS/bin:${PATH}"
+    fi
+    
+    mkdir -p "${srcdir}/build-MSYS" && cd "${srcdir}/build-MSYS"
+    
+    # Cache variables to bypass Linux runtime tests
+    export glibc_cv_forced_unwind=yes
+    export glibc_cv_slibdir=/usr/${_target}/lib
+    export glibc_cv_c_cleanup=yes
+    export glibc_cv_shared_tdata=no
+    
+    ../glibc-${pkgver}/configure \
+      --build=${CHOST} \
+      --host=${_target} \
+      --prefix=/usr/${_target} \
+      --with-headers=/usr/${_target}/include \
+      --disable-werror \
+      --enable-kernel=5.5 \
+      --enable-stack-protector=strong \
+      --disable-nscd \
+      libc_cv_slibdir=/usr/${_target}/lib \
+      --disable-multiarch \
+      --disable-profile \
+      --disable-debug
+    
+    make -j$(nproc) || true # ignore MSYS-specific failures
+}
+
+package() {
+    cd "${srcdir}/build-MSYS"
+    
+    # Install headers and static libs only
+    make DESTDIR="${pkgdir}" install-headers install-static-lib
+}

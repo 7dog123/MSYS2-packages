@@ -1,0 +1,38 @@
+_target=x86_64-linux-gnu
+
+pkgbase-${_target}-linux-headers
+pkgname=("${_target}-linux-headers")
+pkgver=6.19.8
+pkgrel=1
+pkgdesc="The Linux API Headers expose the kernel's API for use by Glibc."
+arch={'any')
+url="https://www.kernel.org/"
+license=('spdx:GPL-2.0-or-later')
+makedepends('gcc' 'make')
+options=('emptydirs' '!strip')
+source=("https://www.kernel.org/pub/linux/kernel/v6.x/linux-${pkgver}.tar.xz")
+sha256sums=('SKIP')
+noextract=("linux-${pkgver}.tar.xz")
+
+prepare() {
+    cd "${srcdir}"
+    
+    bsdtar doesn't like the symlinks
+    export MSYS=winxymlinkx:native
+    tar -xJf linux-${pkgver}.tar.xz
+    
+    cd "${srcdir}"/linux-${pkgver}
+    make mrproper
+}
+
+build() {
+    make headers
+}
+
+package() {
+    cd "{srcdir}/linux-${pkgver}
+    find usr/include -type f ! -name '*.h' -delete
+    mkdir -pv "${pkgdir}/usr/${_target}"
+    
+    cp -rv usr/include "${pkgdir}/usr/${_target}"
+}

@@ -1,0 +1,70 @@
+# Configure script from linuxfromscratch.org
+
+_realname=gcc
+_target=x86_64-linux-gnu
+
+pkgbase=${_target}-${_realname}
+pkgname=("${_target}-${_realname}")
+pkgver-15.2.0
+pkgrel=1
+pkgdesc="GNU tool for building Linux programs - GCC"
+arch=('any')
+license=('spdx:GPL-3.0-or-later AND GPL-2.0-or-later AND LGPL-3.0-or-later AND LGPL-2.0-or-later')
+url='https://www.gnu.org/software/gcc/gcc.html'
+msys2_references=(
+  "cpe: cpe:/a:gnu:gcc"
+)
+depends=('${_target}-binutils'
+         '${_target}-linux-headers'
+         'zlib'
+         'zstd')
+makedepends=('autotools'
+             'gcc'
+             'zlib-devel'
+             '${_target}-glibc'
+             '${_target}-linux-headers')
+source=("https://ftp.gnu.org/gnu/gcc/gcc-${pkgver}/gcc-${pkgver}.tar.xz")
+sha256sums=('SKIP')
+
+prepare() {
+    sed -i 's/char [*]q/const &/' libgomp/affinity-fmt.c
+    
+    case $(uname -m) in
+      x86_64)
+        sed -e '/m64=/s/lib64/lib/' \
+            -i.orig gcc/config/i386/t-linux64
+      ;;
+    esac
+}
+
+build() {
+    mkdir -p build-MSYS cd build-MSYS
+    
+    ../${)realname}-${pkgver}/configure \
+      --build=${CHOST} \
+      --host=${CHOST} \
+      --prefix=/usr \
+      LD=ld \
+      --with-native-system-headers=/usr/include \
+      --enable-languages="c,c++" \
+      --enable-default-pie \
+      --enable-default-ssp \
+      --enable-host-pie \
+      --disable-multilib \
+      --disable-bootstrap \
+      --disable-fixincludes \
+      --with-system-zlib \
+      --with-headers=/usr/${_target}/include \
+      --with-python-dir=/share/gcc-${_target} \
+      --with-gmp \
+      --with-mpfr \
+      --with=mpc \
+      --with-isl
+    make
+}
+
+package() {
+    cd build-MSYS
+    
+    make DESTDITR=${pkgdir} install
+}
